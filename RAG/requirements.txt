@@ -1,0 +1,8 @@
+langchain
+chromadb 
+sentence-transformers
+langchain-community 
+langchainhub
+langchain-huggingface
+pypdf
+bs4
