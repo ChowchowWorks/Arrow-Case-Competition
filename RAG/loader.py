@@ -88,3 +88,5 @@ def receive(input:str):
         raise Exception("---Error: Document splitting failed---")
     return texts
 
+texts = receive("/Users/chowchow/Documents/GitHub/Arrow-Case-Competition/Documents/Veson Market Insights-China Coal Transport.pdf")
+text = [doc.page_content for doc in texts]

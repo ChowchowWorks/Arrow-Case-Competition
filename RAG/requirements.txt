@@ -6,3 +6,4 @@ langchainhub
 langchain-huggingface
 pypdf
 bs4
+langchain-chroma
