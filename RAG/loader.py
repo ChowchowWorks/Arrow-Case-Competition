@@ -43,6 +43,10 @@ def load(file: str):
     return documents
 
 def web_loader(link:str):
+    '''This function takes in a weblink as input
+    it will load the webpage into a local variable
+    returns the webpage stored in the local variable'''
+    
     try:
         loader = WebBaseLoader(link)
         document = loader.load()
