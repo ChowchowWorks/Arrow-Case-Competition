@@ -76,10 +76,7 @@ def split(documents:list):
 
 def receive(input:str):
     # check input type:
-    if check_pdfs(input): # carry out pdf loading
-        documents = load(input)
-    else:
-        documents = web_loader(input)
+    documents = load(input)
     if documents == None:
         raise Exception("---Error: Document Loading failed---")
     # carry out splitting
@@ -87,6 +84,3 @@ def receive(input:str):
     if texts == None:
         raise Exception("---Error: Document splitting failed---")
     return texts
-
-texts = receive("/Users/chowchow/Documents/GitHub/Arrow-Case-Competition/Documents/Veson Market Insights-China Coal Transport.pdf")
-text = [doc.page_content for doc in texts]

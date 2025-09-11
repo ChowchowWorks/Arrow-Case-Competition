@@ -30,9 +30,10 @@ def get_vector_store(persist_dir= 'chroma_db'):
     if not os.path.exists(persist_dir) or not os.listdir(persist_dir):
         print("No Vectorstore found at this location!")
         return None
-    embedding_model = HuggingFaceEmbeddings("sentence-transformers/all-MiniLM-L6-v2")
+    embedding_model = HuggingFaceEmbeddings(model_name= "sentence-transformers/all-MiniLM-L6-v2")
     print("Found a Vectorstore")
     try:
         vectorstore = Chroma(persist_directory= persist_dir, embedding_function=embedding_model)
+        return vectorstore
     except Exception as e:
         print(f"Error: Vectorstore present but failed to retrieve it. \nReason: {e}")
