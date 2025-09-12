@@ -75,5 +75,9 @@ def generate(inputs:dict):
     for key in necessary_keys:
         if key not in inputs.keys():
             raise Exception(f"Missing {key} from inputs! Check inputs again!")
-    chat.invoke(inputs)
-    return
+    response = chat.invoke(inputs)
+    return response
+
+def sample_main(inputs):
+    inputs = input_filter(inputs)
+    
