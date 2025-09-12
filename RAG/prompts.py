@@ -22,9 +22,10 @@ Your response must:
     - Seasonal or short-term demand spikes
     - Pricing trends and volatility
 3. Assess fuel costs and environmental compliance risks for the vessel type.
-4. Identify opportunities and leverage points for both owners and charterers in the negotiation.
-5. Suggest likely valuation ranges (freight rates, premiums/discounts) based on the above.
-6. Present a concise conclusion with key talking points a shipbroker can use during negotiations.
+4. Highlight potential regulatory violations and the potential cost incurred.
+5. Identify opportunities and leverage points for both owners and charterers in the negotiation.
+6. Suggest likely valuation ranges (freight rates, premiums/discounts) based on the above.
+7. Present a concise conclusion with key talking points a shipbroker can use during negotiations.
 
 Make the structure clear and easy to scan, with headings/subheadings for each section.
 Provide actionable insights for negotiation decisions, focusing on both route and cargo dynamics.
