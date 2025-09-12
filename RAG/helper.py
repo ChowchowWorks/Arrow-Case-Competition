@@ -57,7 +57,7 @@ def retrieve(inputs:dict):
     except Exception as e:
         print(f"Error: Retriever failed to retrieve documents. \nReason: {e}")
         return None
-    inputs[context] = final
+    inputs['context'] = final
     return inputs
         
 def generate(inputs:dict):
@@ -70,7 +70,7 @@ def generate(inputs:dict):
                       'destination_port',
                       'origin_port', 
                       'cargo',
-                      'fuel',
+                      'fuel_type',
                       'context']
     for key in necessary_keys:
         if key not in inputs.keys():
@@ -80,4 +80,9 @@ def generate(inputs:dict):
 
 def sample_main(inputs):
     inputs = input_filter(inputs)
-    
+    inputs = retrieve(inputs)
+    answer = generate(inputs)
+    print(answer)
+
+
+sample_main(inputs)

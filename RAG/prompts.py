@@ -9,7 +9,7 @@ Inputs:
 - Origin port : {origin_port}
 - Destination port: {destination_port}
 - Cargo: {cargo}
-- Fuel Type: {fuel}
+- Fuel Type: {fuel_type}
 
 Context:
 {context}
