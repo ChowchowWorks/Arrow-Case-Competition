@@ -1422,7 +1422,42 @@
         let routeLine;
         let portMarkers = [];
         let currentPage = 'home';
+        let routeCoordinates = null;
+        let isFallback = false;
+        let ACCEPTED_PORTS_DATA = null;
+        let isAcceptedPortsDataLoaded = false;
         
+                    // Function to load accepted ports data
+            function loadAcceptedPortsData() {
+                console.log("Attempting to load accepted ports data...");
+                fetch('accepted_ports.json') // Assumes the file is in the same directory
+                    .then(response => {
+                        console.log("Fetch response for accepted ports:", response.status, response.ok);
+                        if (!response.ok) {
+                            if (response.status === 404) {
+                                throw new Error("Accepted ports data file 'accepted_ports.json' not found.");
+                            } else {
+                                throw new Error(`Failed to load accepted ports data. HTTP error! status: ${response.status}`);
+                            }
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        ACCEPTED_PORTS_DATA = data;
+                        isAcceptedPortsDataLoaded = true;
+                        console.log("Accepted ports data loaded successfully:", ACCEPTED_PORTS_DATA.length, "ports");
+                        // Re-initialize map markers if the map is already loaded
+                        if (map) {
+                            initializeMap(); // Or a dedicated function to redraw markers
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading accepted ports data:', error);
+                        alert("Error: " + error.message);
+                        isAcceptedPortsDataLoaded = true; // Mark as attempted
+                    });
+            }
+
         // Page navigation
         function showPage(pageId) {
             // Update navigation
@@ -1488,34 +1523,78 @@
                 }
             });
         }
-        
+        // Add this helper function, preferably near other route/helper functions
+        function findClosestAcceptedPort(targetPort, allPortData) {
+            let closestPort = null;
+            let minDistanceSq = Infinity; // Use squared distance to avoid Math.sqrt
+            const targetLat = targetPort.lat;
+            const targetLng = targetPort.lng;
+
+            allPortData.forEach(port => {
+                // Check if the port is accepted
+                if (port.is_accepted === true && port.code !== targetPort.code) { // Avoid selecting the target port itself if it happens to be marked accepted (shouldn't be needed, but safe)
+                    const deltaLat = targetLat - port.lat;
+                    const deltaLng = targetLng - port.lng;
+                    // Calculate squared Euclidean distance (approximation)
+                    const distanceSq = deltaLat * deltaLat + deltaLng * deltaLng;
+
+                    if (distanceSq < minDistanceSq) {
+                        minDistanceSq = distanceSq;
+                        closestPort = port;
+                    }
+                }
+            });
+
+            return closestPort; // Returns the port object or null if none found
+        }
         // Initialize map
         function initializeMap() {
-            map = L.map('map-container').setView([20, 0], 2);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 18,
-                tileSize: 256
-            }).addTo(map);
+            // No need to wait for separate accepted ports data anymore
+            // if (!isAcceptedPortsDataLoaded) { ... }
 
-            const portIcon = L.divIcon({
-                className: 'custom-port-marker',
-                html: '<div style="background-color: #667eea; width: 8px; height: 8px; border-radius: 50%; border: 2px solid white;"></div>',
-                iconSize: [12, 12],
-                iconAnchor: [6, 6]
-            });
+            if (!map) {
+                map = L.map('map-container').setView([20, 0], 2);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 18,
+                    tileSize: 256
+                }).addTo(map);
+            }
+
+            // Clear existing markers
+            portMarkers.forEach(marker => map.removeLayer(marker));
             portMarkers = [];
 
-            // --- UPDATED: Use generatedPortDataFromJson ---
+            // Define icons based on acceptance status
+            const acceptedPortIcon = L.divIcon({
+                className: 'custom-port-marker',
+                html: '<div style="background-color: green; width: 10px; height: 10px; border-radius: 50%; border: 2px solid white;"></div>',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
+            });
+
+            const unacceptedPortIcon = L.divIcon({
+                className: 'custom-port-marker',
+                html: '<div style="background-color: black; width: 10px; height: 10px; border-radius: 50%; border: 2px solid white;"></div>',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
+            });
+
+            // Iterate through the generated port data and add markers
             generatedPortDataFromJson.forEach(port => {
-                const marker = L.marker([port.lat, port.lng], { icon: portIcon }).addTo(map);
-                marker.bindPopup(`<b>${port.name}</b><br>${port.country}<br>Code: ${port.code}<br>${port.info}`);
+                // Use the embedded 'is_accepted' flag
+                const isAccepted = port.is_accepted === true;
+                const markerIcon = isAccepted ? acceptedPortIcon : unacceptedPortIcon;
+
+                const marker = L.marker([port.lat, port.lng], { icon: markerIcon }).addTo(map);
+
+                const statusText = isAccepted ? "(Panamax Accepted)" : "(Panamax Not Accepted)";
+                marker.bindPopup(`<b>${port.name}</b><br>${port.country}<br>Code: ${port.code}<br>${statusText}<br>${port.info || ''}`);
+
                 portMarkers.push(marker);
             });
-            // --- END UPDATED ---
 
-            // Trigger route update if ports are already selected
-            updateRoute();
+            updateRoute(); // Trigger route update if ports are already selected
         }
         
         // Toggle market sections
@@ -1642,91 +1721,35 @@
                 console.warn("Map not initialized yet. Cannot update route.");
                 return;
             }
-
             const loadPortCodeElement = document.getElementById('routeLoadPort');
             const dischargePortCodeElement = document.getElementById('routeDischargePort');
             if (!loadPortCodeElement || !dischargePortCodeElement) {
                 console.error("Route port select elements not found.");
                 return;
             }
-
             const loadPortCode = loadPortCodeElement.value;
             const dischargePortCode = dischargePortCodeElement.value;
-
             // Clear existing route if inputs are invalid
             if (!loadPortCode || !dischargePortCode || loadPortCode === dischargePortCode) {
                 clearCurrentRoute();
                 hideRouteInfo();
                 return;
             }
-
-            // Find port data using the portData array
+            // Find port data using the generatedPortDataFromJson array
             const loadPort = generatedPortDataFromJson.find(p => p.code === loadPortCode);
             const dischargePort = generatedPortDataFromJson.find(p => p.code === dischargePortCode);
-
             if (!loadPort || !dischargePort) {
                 console.error("Port data not found for selected codes:", loadPortCode, dischargePortCode);
                 clearCurrentRoute();
                 hideRouteInfo();
                 return;
             }
-
             // Remove any existing route line from the map
             clearCurrentRoute();
 
-            // --- Use pre-calculated route data ---
-            let routeCoordinates = null;
-            let isFallback = false;
-
-            // Check if the route data has finished loading (successfully or unsuccessfully)
-            if (isSeaRouteDataLoaded && CALCULATED_SEA_ROUTES) {
-                // Construct potential keys (A-B and B-A)
-                const routeKeyAB = `${loadPortCode}-${dischargePortCode}`;
-                const routeKeyBA = `${dischargePortCode}-${loadPortCode}`;
-
-                if (CALCULATED_SEA_ROUTES[routeKeyAB]) {
-                    routeCoordinates = CALCULATED_SEA_ROUTES[routeKeyAB];
-                    console.log(`Found pre-calculated route for ${routeKeyAB}`);
-                } else if (CALCULATED_SEA_ROUTES[routeKeyBA]) {
-                    // If only stored one way (A-B), use it reversed for (B-A)
-                    routeCoordinates = CALCULATED_SEA_ROUTES[routeKeyBA].slice().reverse();
-                    console.log(`Found and reversed pre-calculated route for ${routeKeyBA}`);
-                } else {
-                    console.warn(`No pre-calculated route found for ${routeKeyAB} or ${routeKeyBA}`);
-                    isFallback = true;
-                }
-            } else if (isSeaRouteDataLoaded) {
-                // Data finished loading, but it's null/empty
-                console.warn("Sea route data is loaded but empty or invalid.");
-                isFallback = true;
-            } else {
-                // Data is still loading. Wait a short time and retry once.
-                console.log("Sea route data is still loading, waiting...");
-                setTimeout(() => {
-                    if (isSeaRouteDataLoaded) {
-                        console.log("Sea route data loaded after delay, retrying updateRoute.");
-                        updateRoute(); // Recursive call
-                    } else {
-                        console.warn("Sea route data still not loaded, using fallback.");
-                        isFallback = true;
-                        drawRoute(loadPort, dischargePort, null, isFallback);
-                    }
-                }, 500); // Wait 0.5 seconds
-                return; // Exit early, let the timeout handle the rest
-            }
-
-            // If no pre-calculated data available or not loaded correctly, use straight line as fallback
-            if (isFallback || !routeCoordinates || routeCoordinates.length < 2) {
-                console.warn("Using straight line as fallback for route display.");
-                routeCoordinates = [[loadPort.lng, loadPort.lat], [dischargePort.lng, dischargePort.lat]]; // [lng,lat] format
-                isFallback = true;
-            }
-
-            // Draw the route (either calculated or fallback)
-            drawRoute(loadPort, dischargePort, routeCoordinates, isFallback);
-            // --- END Use pre-calculated route data ---
-
-            document.getElementById('routeInfo')?.classList.remove('hidden');
+            // Pass the original ports to drawRoute, it will handle finding effective ports and route data
+            // Pass null for routeCoordinates initially, and false for isFallback
+            drawRoute(loadPort, dischargePort, null, false);
         }
 
         // --- Add these helper functions near updateRoute or with other route functions ---
@@ -1748,41 +1771,210 @@
         }
 
         // Helper function to draw the route on the map
-        function drawRoute(loadPort, dischargePort, routeCoordinates, isFallback) {
+        function drawRoute(loadPort, dischargePort) {
+            // Clear any existing route
+            clearCurrentRoute();
+            hideRouteInfo(); // Hide previous route info/messages
+
+            const isLoadPortAccepted = loadPort.is_accepted === true;
+            const isDischargePortAccepted = dischargePort.is_accepted === true;
+
+            let effectiveLoadPort = loadPort;
+            let effectiveDischargePort = dischargePort;
+            let infoMessage = "";
+
+            // --- Logic to determine effective ports ---
+            if (!isLoadPortAccepted && !isDischargePortAccepted) {
+                // Case 3: Both unaccepted
+                const closestToLoad = findClosestAcceptedPort(loadPort, generatedPortDataFromJson);
+                const closestToDischarge = findClosestAcceptedPort(dischargePort, generatedPortDataFromJson);
+                if (closestToLoad && closestToDischarge) {
+                    effectiveLoadPort = closestToLoad;
+                    effectiveDischargePort = closestToDischarge;
+                    infoMessage = `Note: Routing via closest accepted ports. Loading at ${effectiveLoadPort.name} (${effectiveLoadPort.code}) instead of ${loadPort.name} (${loadPort.code}) and discharging at ${effectiveDischargePort.name} (${effectiveDischargePort.code}) instead of ${dischargePort.name} (${dischargePort.code}). These intermediate ports may not accept Panamax vessels.`;
+                } else {
+                    infoMessage = "Error: Could not find suitable accepted ports for routing.";
+                    displayRouteMessage(infoMessage); // Show error message
+                    return;
+                }
+
+            } else if (!isLoadPortAccepted) {
+                // Case 2a: Load unaccepted, Discharge accepted
+                const closestToLoad = findClosestAcceptedPort(loadPort, generatedPortDataFromJson);
+                if (closestToLoad) {
+                    effectiveLoadPort = closestToLoad;
+                    infoMessage = `Note: Routing via closest accepted port. Loading at ${effectiveLoadPort.name} (${effectiveLoadPort.code}) instead of ${loadPort.name} (${loadPort.code}). This intermediate port may not accept Panamax vessels.`;
+                } else {
+                    infoMessage = "Error: Could not find a suitable accepted port near the loading port.";
+                    displayRouteMessage(infoMessage);
+                    return;
+                }
+
+            } else if (!isDischargePortAccepted) {
+                // Case 2b: Load accepted, Discharge unaccepted
+                const closestToDischarge = findClosestAcceptedPort(dischargePort, generatedPortDataFromJson);
+                if (closestToDischarge) {
+                    effectiveDischargePort = closestToDischarge;
+                    infoMessage = `Note: Routing via closest accepted port. Discharging at ${effectiveDischargePort.name} (${effectiveDischargePort.code}) instead of ${dischargePort.name} (${dischargePort.code}). This intermediate port may not accept Panamax vessels.`;
+                } else {
+                    infoMessage = "Error: Could not find a suitable accepted port near the discharging port.";
+                    displayRouteMessage(infoMessage);
+                    return;
+                }
+            }
+            // Case 1: Both accepted -> effective ports are the same, no infoMessage needed.
+
+            // --- Fetch and Draw Route ---
+            let routeCoordinates = null;
+            let isFallback = false;
+
+            // Check if pre-calculated route data is loaded
+            if (isSeaRouteDataLoaded && CALCULATED_SEA_ROUTES) {
+                const routeKeyAB = `${effectiveLoadPort.code}-${effectiveDischargePort.code}`;
+                const routeKeyBA = `${effectiveDischargePort.code}-${effectiveLoadPort.code}`;
+
+                if (CALCULATED_SEA_ROUTES[routeKeyAB]) {
+                    routeCoordinates = CALCULATED_SEA_ROUTES[routeKeyAB];
+                    console.log(`Found pre-calculated route for ${routeKeyAB}`);
+                } else if (CALCULATED_SEA_ROUTES[routeKeyBA]) {
+                    // Reverse the coordinates if the route was stored the other way
+                    routeCoordinates = CALCULATED_SEA_ROUTES[routeKeyBA].slice().reverse();
+                    console.log(`Found and reversed pre-calculated route for ${routeKeyBA}`);
+                } else {
+                    console.warn(`No pre-calculated route found for ${routeKeyAB} or ${routeKeyBA}`);
+                    isFallback = true;
+                }
+            } else if (isSeaRouteDataLoaded) {
+                console.warn("Sea route data loaded but appears empty/invalid.");
+                isFallback = true;
+            } else {
+                console.log("Sea route data still loading, using fallback.");
+                isFallback = true; // Or wait/retry if preferred
+            }
+
+            // Fallback to straight line if no route found or data not ready
+            if (isFallback || !routeCoordinates || routeCoordinates.length < 2) {
+                console.warn("Using straight line as fallback for route display.");
+                routeCoordinates = [[effectiveLoadPort.lng, effectiveLoadPort.lat], [effectiveDischargePort.lng, effectiveDischargePort.lat]];
+                isFallback = true;
+            }
+
+            // --- Draw the Route and Display Info ---
             if (!routeCoordinates || routeCoordinates.length < 2) {
-                console.error("Invalid or insufficient route coordinates to draw.");
-                clearCurrentRoute();
-                hideRouteInfo();
+                console.error("Invalid route coordinates to draw.");
+                displayRouteMessage("Error: Unable to display route.");
                 return;
             }
 
-            // Convert from [lng, lat] (data format) to [lat, lng] (Leaflet format)
-            const leafletCoordinates = routeCoordinates
-                .filter(coord => coord && coord.length >= 2)
-                .map(coord => [coord[1], coord[0]]); // Swap [lng,lat] -> [lat,lng]
+            // Draw the polyline on the map
+            const leafletCoordinates = routeCoordinates.map(coord => [coord[1], coord[0]]); // Convert [lng,lat] to [lat,lng]
+            routeLine = L.polyline(leafletCoordinates, {
+                color: isFallback ? '#cccccc' : '#667eea',
+                weight: isFallback ? 2 : 3,
+                opacity: isFallback ? 0.6 : 0.8,
+                dashArray: isFallback ? '5, 5' : null
+            }).addTo(map);
 
-            if (leafletCoordinates.length >= 2) {
-                // Draw the polyline using the calculated coordinates
-                routeLine = L.polyline(leafletCoordinates, {
-                    color: isFallback ? '#cccccc' : '#667eea', // Different color for fallback
-                    weight: isFallback ? 2 : 3,
-                    opacity: isFallback ? 0.6 : 0.8,
-                    dashArray: isFallback ? '5, 5' : null // Dashed line for fallback
-                }).addTo(map);
+            map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
 
-                // Fit the map view to the new route
-                map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            // Calculate and display route details (distance, time, etc.)
+            displayRouteInfo(effectiveLoadPort, effectiveDischargePort); // Implement this function to calculate based on drawn line or coordinates
 
-                // Calculate and display route details (uses straight-line distance for now)
-                calculateRouteDetails(loadPort, dischargePort);
+            // Display the informational message about effective ports
+            displayRouteMessage(infoMessage);
 
-            } else {
-                console.error("Processed route coordinates are invalid or empty.");
-                clearCurrentRoute();
-                hideRouteInfo();
+            // Show the route info panel
+            document.getElementById('routeInfo')?.classList.remove('hidden');
+
+        }
+
+        // --- Helper function to display the informational message ---
+        function displayRouteMessage(message) {
+            const routeInfoElement = document.getElementById('routeInfo');
+            if (routeInfoElement) {
+                // Find or create the paragraph for the message
+                let messagePara = document.getElementById('intermediate-port-info');
+                if (!messagePara) {
+                    messagePara = document.createElement('p');
+                    messagePara.id = 'intermediate-port-info';
+                    messagePara.style.marginTop = '10px';
+                    messagePara.style.fontStyle = 'italic';
+                    // Append it, e.g., at the end of the route info div or before the grid
+                    const gridElement = routeInfoElement.querySelector('.grid'); // Assuming .grid holds distance/time/fuel
+                    if (gridElement) {
+                        routeInfoElement.insertBefore(messagePara, gridElement.nextSibling); // Insert after grid
+                    } else {
+                        routeInfoElement.appendChild(messagePara); // Fallback
+                    }
+                }
+                messagePara.textContent = message || ""; // Clear if message is empty/null
             }
         }
-        
+
+        // --- Helper function to calculate/display route details ---
+        function displayRouteInfo(loadPort, dischargePort) {
+            // Calculate distance using the actual route coordinates if available and valid
+            let distanceInNm = 0;
+            if (routeLine) {
+                // Approximate distance by summing segments (Leaflet's distance calculation)
+                const latlngs = routeLine.getLatLngs();
+                for (let i = 1; i < latlngs.length; i++) {
+                    // Leaflet's distanceTo returns meters, convert to nautical miles (1 NM = 1852 meters)
+                    distanceInNm += latlngs[i-1].distanceTo(latlngs[i]) / 1852;
+                }
+                distanceInNm = Math.round(distanceInNm);
+            } else {
+                // Fallback to Haversine if routeLine not available (shouldn't happen normally here)
+                const R = 3440; // Earth's radius in nautical miles
+                const lat1 = loadPort.lat * Math.PI / 180;
+                const lat2 = dischargePort.lat * Math.PI / 180;
+                const deltaLat = (dischargePort.lat - loadPort.lat) * Math.PI / 180;
+                const deltaLng = (dischargePort.lng - loadPort.lng) * Math.PI / 180;
+                const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+                        Math.cos(lat1) * Math.cos(lat2) *
+                        Math.sin(deltaLng/2) * Math.sin(deltaLng/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                distanceInNm = Math.round(R * c);
+            }
+
+            const speed = parseFloat(document.getElementById('vesselSpeed').value) || 14;
+            const fuelConsumption = parseFloat(document.getElementById('fuelConsumption').value) || 35;
+            const sailingTime = Math.round((distanceInNm / speed / 24) * 10) / 10;
+            const fuelRequired = Math.round(sailingTime * fuelConsumption);
+            const estimatedCost = Math.round(fuelRequired * 600); // Assuming $600/MT fuel cost
+
+            document.getElementById('routeDistance').textContent = distanceInNm.toLocaleString();
+            document.getElementById('sailingTime').textContent = sailingTime;
+            document.getElementById('fuelRequired').textContent = fuelRequired.toLocaleString();
+            document.getElementById('estimatedCost').textContent = '$' + estimatedCost.toLocaleString();
+
+            // Ensure the route info panel is visible (might be redundant if done in drawRoute)
+            document.getElementById('routeInfo')?.classList.remove('hidden');
+        }
+
+
+        // --- Helper function to draw the polyline on the map ---
+        function drawRouteOnMap(loadPort, dischargePort, routeCoordinates, isFallback) {
+            clearCurrentRoute(); // Clear any existing route
+
+            const leafletCoordinates = routeCoordinates
+                .filter(coord => coord && coord.length >= 2)
+                .map(coord => [coord[1], coord[0]]); // Convert [lng,lat] to [lat,lng]
+
+            if (leafletCoordinates.length >= 2) {
+                routeLine = L.polyline(leafletCoordinates, {
+                    color: isFallback ? '#cccccc' : '#667eea',
+                    weight: isFallback ? 2 : 3,
+                    opacity: isFallback ? 0.6 : 0.8,
+                    dashArray: isFallback ? '5, 5' : null
+                }).addTo(map);
+
+                map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            } else {
+                console.error("Processed route coordinates are invalid or empty for drawing.");
+                clearCurrentRoute();
+            }
+        } 
         function calculateRouteDetails(loadPort, dischargePort) {
             const R = 3440; // Earth's radius in nautical miles
             const lat1 = loadPort.lat * Math.PI / 180;
@@ -3954,7 +4146,7 @@ NOTE: Check other tabs for detailed analysis and comparisons.
         // Function to load pre-calculated sea route data
         function loadSeaRouteData() {
             console.log("Attempting to load sea route data...");
-            fetch('calculated_sea_routes.json') // Assumes the file is in the same directory
+            fetch('calculated_sea_routes_for_accepted_ports.json') // Assumes the file is in the same directory
                 .then(response => {
                     console.log("Fetch response for sea routes:", response.status, response.ok);
                     if (!response.ok) {
@@ -3987,6 +4179,7 @@ NOTE: Check other tabs for detailed analysis and comparisons.
             addAlternativeScenario(); // Add initial alternative scenario
             populateYearSelectors();
             loadSeaRouteData();
+            loadAcceptedPortsData();
         }
         
     </script>
