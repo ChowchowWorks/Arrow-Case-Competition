@@ -1,12 +1,16 @@
 import os
 from loader import receive
-from config import *
+from config import HF_TOKEN, DOCS_DIR, PROJECT_ROOT
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
 os.environ['USER_AGENT'] = "ARROW_RAG"
 
 def embed(documents, persist_directory = 'chroma_db'):
+    '''This function takes as input a file_path as 'documents
+    It calls the receive function to chunk the document at the file_path location
+    Function will check if there is an existing vector store pre-tuned as chroma_db
+    It will then embed the chunks into the vectorstore'''
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2") 
     texts = receive(documents)
     if not os.path.exists(persist_directory) or not os.listdir(persist_directory):
@@ -37,3 +41,8 @@ def get_vector_store(persist_dir= 'chroma_db'):
         return vectorstore
     except Exception as e:
         print(f"Error: Vectorstore present but failed to retrieve it. \nReason: {e}")
+
+
+def normalize_path(path: str) -> str:
+    """Convert absolute path to relative path inside Documents/."""
+    return os.path.relpath(path, DOCS_DIR)

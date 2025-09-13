@@ -26,4 +26,4 @@ class HuggingFaceChatRunnable(Runnable):
         except (IndexError, KeyError):
             raise ValueError("Unexpected response format from the LLM client.")
 
-chat = HuggingFaceChatRunnable(client, prompt_template=prompt, temperature= 0.5, max_tokens= 1200)
+chat = HuggingFaceChatRunnable(client, prompt_template=prompt, temperature= 0.3, max_tokens= 1500)
