@@ -4,18 +4,6 @@ from llm import chat
 from prompts import prompt
 from indexing import embed, get_vector_store, normalize_path
 
-inputs = {'origin_port' : 'Singapore', 
-          'destination_port' : 'Shanghai', 
-          'ship_type' : 'panamax', 
-          'dwt' : 75000, 
-          'length' : 225, 
-          'width' : 32.2,
-          'draft' : 12.0,
-          'cargo' : 'coal',
-          'fuel_type' : 'VLSFO',
-          'consumption_model' : '35 mt/day at 14 knots',
-          'timeframe' : '20-30 Oct 2025 laycan' }
-
 def input_filter(inputs: dict) -> dict:
     '''This function takes as input the dictionary of inputs given using the dashboard interface
     It filters input values that are useful for RAG pipeline retrieval
