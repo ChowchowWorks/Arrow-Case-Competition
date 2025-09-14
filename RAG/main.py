@@ -7,16 +7,21 @@ app = Flask(__name__)
 def main():
     if request.method == "POST":
         inputs = {
-            "origin_port": request.form.get("origin_port"),
-            "destination_port": request.form.get("destination_port"),
+            "From Port": request.form.get("From Port"),
+            "To Port": request.form.get("To Port"),
+            "Loading Port": request.form.get("Loading Port"),
+            "Discharging Port": request.form.get("Discharging Port"),
             "ship_type": request.form.get("ship_type"),
             "dwt": request.form.get("dwt"),
             "length": request.form.get("length"),
             "width": request.form.get("width"),
-            "draft": request.form.get("draft"),
-            "fuel_type": request.form.get("fuel_type"),
-            "cargo": request.form.get("cargo"),
-            "timeframe": request.form.get("timeframe")
+            "CAPEX Description": request.form.get("CAPEX Description"),
+            "Fuel Type": request.form.get("Fuel Type"),
+            "Cargo Type": request.form.get("Cargo Type"),
+            "Laycan Start": request.form.get("Laycan Start"),
+            "Laycan End": request.form.get("Laycan End"),
+            "Pooling Price": request.form.get("Pooling Price"),
+            
         }
         res = retrieve(input_filter(inputs))
         inputs_with_context = get_inputs(res)
@@ -25,4 +30,5 @@ def main():
         briefing = generate(inputs_with_context)
         
         return render_template("dashboard.html", briefing=briefing, pdf_files=pdf_files)
+    
     
