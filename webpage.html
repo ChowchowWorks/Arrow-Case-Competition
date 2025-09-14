@@ -693,6 +693,47 @@
             margin-bottom: 15px;
             color: #667eea;
         }
+        .rag-content h2 { /* Main Title */
+            font-size: 1.5em;
+            color: #2c3e50;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+            margin-top: 20px;
+            margin-bottom: 15px;
+        }
+        .rag-content h3 { /* Main Section Headings (e.g., 1. Route Overview) */
+            font-size: 1.3em;
+            color: #34495e;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .rag-content h4 { /* Subsection Headings (e.g., 1.1 Geopolitical Risks) */
+            font-size: 1.1em;
+            color: #455a64;
+            margin-top: 15px;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        .rag-content h5 { /* Sub-sub headings if used */
+            font-size: 1em;
+            color: #546e7a;
+            margin-top: 10px;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .rag-content ul, .rag-content ol {
+            margin-top: 5px;
+            margin-bottom: 15px;
+            padding-left: 20px;
+        }
+        .rag-content li {
+            margin-bottom: 5px;
+        }
+        .rag-content p {
+            margin-top: 0;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
 
         @media (max-width: 768px) {
             .sidebar {
@@ -1040,8 +1081,14 @@
                     </div>
                     
                     <div style="text-align: center; margin-top: 20px;">
-                        <button class="btn btn-primary" onclick="analyzeRequirements()">Analyze Requirements</button>
+                        <button type="button" class="btn btn-primary" onclick="analyzeRequirements()">Analyze Requirements</button>
                     </div>
+                </div>
+                <div id="chartering-rag-results" class="rag-results-section hidden">
+                    <h3>Chartering Insights</h3>
+                    <div class="rag-content" id="chartering-briefing-content"></div>
+                    <h4>Relevant Documents</h4>
+                    <ul class="rag-doc-links" id="chartering-pdf-links-list"></ul>
                 </div>
 
                 <div id="vesselRecommendations" class="vessel-recommendations hidden">
@@ -1062,6 +1109,9 @@
                         <button onclick="sendMessage('chartering')">Send</button>
                     </div>
                 </div>
+
+                <button type="button" class="btn btn-primary" onclick="analyzeCharteringWithRAG()">Get Chartering Insights</button>
+
             </div>
 
             <!-- Voyage Optimization Page -->
@@ -1105,6 +1155,12 @@
                         </div>
                     </div>
                 </div>
+                <div id="voyage-rag-results" class="rag-results-section hidden">
+                    <h3>Route & Market Insights</h3>
+                    <div class="rag-content" id="voyage-briefing-content"></div>
+                    <h4>Relevant Documents</h4>
+                    <ul class="rag-doc-links" id="voyage-pdf-links-list"></ul>
+                </div>
 
                 <!-- Chat Section for Voyage -->
                 <div class="chat-container">
@@ -1145,6 +1201,20 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- RAG Analysis Results Section -->
+                <div id="rag-results" class="hidden"> <!-- Hidden by default until results are available -->
+                    <h3>RAG Analysis Briefing</h3>
+                    <div id="briefing-content">
+                        <!-- The detailed textual analysis from the RAG pipeline will be inserted here by JavaScript -->
+                    </div>
+                    <h4>Relevant Documents</h4>
+                    <ul id="pdf-links-list">
+                        <!-- Links to relevant PDFs identified by the RAG pipeline will be inserted here by JavaScript -->
+                    </ul>
+                </div>
+                <!-- The section you provided ends here, likely before the next <div class="section"> -->
+
 
                 <!-- Baseline Scenario -->
                 <div class="section">
@@ -1886,6 +1956,8 @@
             // Show the route info panel
             document.getElementById('routeInfo')?.classList.remove('hidden');
 
+            analyzeVoyageWithRAG();
+
         }
 
         // --- Helper function to display the informational message ---
@@ -2004,58 +2076,170 @@
         
         // Chat functionality
         function sendMessage(pageId) {
-            const input = document.getElementById(`chat-input-${pageId}`);
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
+            const inputElement = document.getElementById(`chat-input-${pageId}`);
+            const message = inputElement.value.trim();
+            inputElement.value = ''; // Clear the input field
+
+            if (!message) {
+                return; // Don't send empty messages
+            }
+
+            // Display the user's message immediately
             addChatMessage(message, 'user', pageId);
-            input.value = '';
-            
-            setTimeout(() => {
-                const response = generateAIResponse(message, pageId);
-                addChatMessage(response, 'bot', pageId);
-            }, 1000);
+
+            // Send the query to the RAG API
+            sendQueryToRAG(message, pageId);
         }
         
-        function addChatMessage(message, sender, pageId) {
+        function sendQueryToRAG(query, pageId) {
+            // --- CONFIGURATION ---
+            const RAG_API_URL = 'http://127.0.0.1:5000/api/query';
+
+            // Display a "thinking" indicator
+            const thinkingMessageId = `thinking-${Date.now()}`;
+            addTemporaryMessage("Consulting maritime intelligence...", 'bot', pageId, thinkingMessageId);
+
+            // --- PREPARE REQUEST DATA ---
+            // Option 1: Send as a general 'question' (requires server-side handling)
+            let requestData = { question: query };
+
+            // Option 2: Send structured data (example - adapt based on context)
+            // If you want to include context like selected ports, get them:
+            /*
+            const loadPortSelect = document.getElementById('routeLoadPort');
+            const dischargePortSelect = document.getElementById('routeDischargePort');
+            const loadPortText = loadPortSelect ? loadPortSelect.options[loadPortSelect.selectedIndex]?.text || "Not Selected" : "Unknown";
+            const dischargePortText = dischargePortSelect ? dischargePortSelect.options[dischargePortSelect.selectedIndex]?.text || "Not Selected" : "Unknown";
+
+            requestData = {
+                origin_port: loadPortText,
+                destination_port: dischargePortText,
+                ship_type: "General Inquiry",
+                dwt: "N/A",
+                length: "N/A",
+                width: "N/A",
+                draft: "N/A",
+                fuel_type: "N/A",
+                cargo: query, // Put the chat message in the cargo field
+                timeframe: "N/A"
+            };
+            */
+            // --- END PREPARE REQUEST DATA ---
+
+            // --- SEND REQUEST ---
+            fetch(RAG_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                    // Add 'Authorization' header here if your RAG API requires an API key
+                    // 'Authorization': 'Bearer YOUR_API_KEY_HERE'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => {
+                // Remove the "thinking" indicator once we get a response (success or error)
+                removeTemporaryMessage(thinkingMessageId);
+
+                if (!response.ok) {
+                    console.error(`RAG API request failed: ${response.status} ${response.statusText}`);
+                    throw new Error(`API Error: ${response.status} - ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Received data from RAG API:", data);
+
+                // --- HANDLE API RESPONSE ---
+                if (data.error) {
+                    addChatMessage(`RAG Pipeline Error: ${data.error}`, 'bot', pageId);
+                    return;
+                }
+
+                // Extract the main text response ('briefing')
+                const ragBriefing = data.briefing || "Sorry, I couldn't formulate a response based on the available data.";
+
+                // Display the main response
+                addChatMessage(ragBriefing, 'bot', pageId);
+
+                // Handle the list of relevant PDF files, if provided
+                if (data.pdf_files && Array.isArray(data.pdf_files) && data.pdf_files.length > 0) {
+                    let pdfLinksHtml = "<b>Relevant Documents:</b><ul>";
+                    data.pdf_files.forEach(pdfFileName => {
+                        // IMPORTANT: Adjust the path prefix so the links work correctly in your browser.
+                        // This depends on how your main web server serves static files.
+                        // Example assumptions:
+                        // - Your main HTML is served from the project root.
+                        // - Your PDFs are in a folder named 'Documents' at the project root.
+                        // - Your Flask RAG server (if it serves static files) also makes them accessible.
+                        // You might need to adjust this path.
+                        const fullPath = `Documents/${pdfFileName}`; // <--- ADJUST THIS PATH AS NEEDED
+                        pdfLinksHtml += `<li><a href="${fullPath}" target="_blank">${pdfFileName}</a></li>`;
+                    });
+                    pdfLinksHtml += "</ul>";
+                    // Add the PDF links as an HTML message
+                    addChatMessage(pdfLinksHtml, 'bot', pageId, null, true); // true indicates HTML content
+                }
+                // --- END HANDLE API RESPONSE ---
+
+            })
+            .catch(error => {
+                // Ensure the "thinking" message is removed if an error occurs before the response
+                const tempMsgElement = document.getElementById(thinkingMessageId);
+                if (tempMsgElement) {
+                    tempMsgElement.remove();
+                }
+
+                console.error('Error in sendQueryToRAG:', error);
+
+                // Display a user-friendly error message
+                let userFriendlyMessage = "Sorry, I'm having trouble connecting to my knowledge base right now. Please ensure the RAG server is running and try again later.";
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    userFriendlyMessage = "Unable to connect to the AI assistant service. Please ensure the RAG server (server.py) is running.";
+                } else if (error.message) {
+                    userFriendlyMessage = `Error: ${error.message}`;
+                }
+                addChatMessage(userFriendlyMessage, 'bot', pageId);
+            });
+            // --- END SEND REQUEST ---
+        }
+
+        function addChatMessage(message, sender, pageId, elementId = null, isHtml = false) {
             const messagesContainer = document.getElementById(`chat-messages-${pageId}`);
+            if (!messagesContainer) {
+                console.error(`Chat messages container not found for pageId: ${pageId}`);
+                return;
+            }
+
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${sender}-message`;
-            messageDiv.textContent = message;
+            if (elementId) {
+                messageDiv.id = elementId;
+            }
+
+            if (isHtml) {
+                messageDiv.innerHTML = message; // Use innerHTML for HTML content
+            } else {
+                messageDiv.textContent = message; // Use textContent for plain text
+            }
+
             messagesContainer.appendChild(messageDiv);
+            // Auto-scroll to the bottom of the chat
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
         
-        function generateAIResponse(message, pageId) {
-            const responses = {
-                'home': {
-                    'platform': 'This platform helps with vessel chartering and route optimization. Use the sidebar to navigate between different sections.',
-                    'navigation': 'Use the sidebar menu to access Chartering Requirements and Voyage Optimization features.',
-                    'default': 'I can help you navigate this platform and provide maritime insights. What would you like to know?'
-                },
-                'chartering': {
-                    'cargo': 'I can help you define cargo specifications and recommend suitable vessel types based on your requirements.',
-                    'vessel': 'Different cargo types require specific vessel features. For bulk cargo, consider geared vessels with proper ventilation.',
-                    'default': 'I can assist with cargo specifications, vessel recommendations, and chartering terms. What do you need help with?'
-                },
-                'voyage': {
-                    'route': 'I can help optimize routes considering distance, fuel consumption, and weather patterns for cost-effective voyages.',
-                    'optimization': 'Route optimization considers factors like fuel efficiency, port charges, and sailing time to minimize total voyage costs.',
-                    'default': 'I can assist with route planning, distance calculations, and voyage cost optimization. What route are you considering?'
-                }
-            };
-            
-            const pageResponses = responses[pageId] || responses['home'];
-            const lowerMessage = message.toLowerCase();
-            
-            for (const [key, response] of Object.entries(pageResponses)) {
-                if (key !== 'default' && lowerMessage.includes(key)) {
-                    return response;
-                }
+        function addTemporaryMessage(message, sender, pageId, elementId) {
+            addChatMessage(message, sender, pageId, elementId);
+        }
+
+        /**
+         * Removes a temporary message element by its ID.
+         * @param {string} elementId - The ID of the element to remove.
+         */
+        function removeTemporaryMessage(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.remove();
             }
-            
-            return pageResponses.default;
         }
         
         // Initialize on page load
@@ -4169,6 +4353,272 @@ NOTE: Check other tabs for detailed analysis and comparisons.
                     isSeaRouteDataLoaded = true; // Mark as loaded (even if failed) to stop retries
                 });
         }
+        // --- BEGIN: RAG Integration Functions ---
+
+            /**
+             * Generic function to send data to the RAG API and update a specific section of the page.
+             * @param {Object} data - The data object to send to the RAG API.
+             * @param {string} resultSectionId - The ID of the main results container div (e.g., 'chartering-rag-results').
+             * @param {string} briefingContentId - The ID of the div to put the briefing text into.
+             * @param {string} pdfLinksListId - The ID of the ul to put the PDF links into.
+             */
+        /**
+         * Generic function to send data to the RAG API and update a specific section of the page.
+         * @param {Object} data - The data object to send to the RAG API.
+         * @param {string} resultSectionId - The ID of the main results container div (e.g., 'chartering-rag-results').
+         * @param {string} briefingContentId - The ID of the div to put the briefing text into.
+         * @param {string} pdfLinksListId - The ID of the ul to put the PDF links into.
+         */
+        function queryRAGAndDisplay(data, resultSectionId, briefingContentId, pdfLinksListId) {
+            console.log("DEBUG: queryRAGAndDisplay called for", resultSectionId);
+            const RAG_API_URL = 'http://127.0.0.1:5000/api/query'; 
+
+            const resultSection = document.getElementById(resultSectionId);
+            const briefingContent = document.getElementById(briefingContentId);
+            const pdfLinksList = document.getElementById(pdfLinksListId);
+
+            // --- VALIDATE INPUT ELEMENTS ---
+            if (!resultSection || !briefingContent || !pdfLinksList) {
+                const errorMsg = `RAG Display Error: Could not find result elements for IDs: ${resultSectionId}, ${briefingContentId}, ${pdfLinksListId}`;
+                console.error(errorMsg);
+                // Attempt to show a basic error in the briefing area if the main section exists
+                if (resultSection && briefingContent) {
+                    resultSection.classList.remove('hidden');
+                    briefingContent.textContent = errorMsg;
+                }
+                return;
+            }
+            // --- END VALIDATION ---
+
+            // --- SHOW LOADING INDICATOR ---
+            resultSection.classList.remove('hidden');
+            briefingContent.textContent = 'Consulting maritime intelligence...';
+            pdfLinksList.innerHTML = ''; // Clear any previous content
+            // --- END LOADING ---
+
+            console.log(`Sending data to RAG API for ${resultSectionId}:`, data);
+
+            // --- SEND REQUEST TO RAG API ---
+            fetch(RAG_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                    // Add 'Authorization': 'Bearer YOUR_API_KEY_HERE' if needed
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                console.log("DEBUG: Fetch response received for", resultSectionId);
+                if (!response.ok) {
+                    // Handle specific HTTP errors if needed, or let the .catch handle network issues
+                    throw new Error(`API Error: ${response.status} - ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("DEBUG: Data processing starts for", resultSectionId);
+                console.log(`Received data from RAG API for ${resultSectionId}:`, data);
+
+                // --- HANDLE API RESPONSE ---
+                if (data.error) {
+                    console.warn(`RAG API returned an error for ${resultSectionId}:`, data.error);
+                    briefingContent.textContent = `RAG Error: ${data.error}`;
+                    pdfLinksList.innerHTML = ''; // Ensure PDF list is cleared on error
+                    return; // Stop processing
+                }
+
+                // --- DISPLAY BRIEFING ---
+                // Use innerHTML to allow for basic formatting (like line breaks) in the LLM response.
+                // This assumes the LLM outputs plain text with \n for newlines or simple HTML.
+                // If the LLM outputs complex/untrusted HTML, use textContent and add CSS for styling.
+                const ragBriefing = data.briefing || "Sorry, I couldn't formulate a response based on the available data.";
+                briefingContent.innerHTML = ragBriefing; // Use innerHTML for potential formatting
+                // --- END DISPLAY BRIEFING ---
+
+                // --- DISPLAY PDF LINKS ---
+                pdfLinksList.innerHTML = ''; // Clear loading message or previous links
+                if (data.pdf_files && Array.isArray(data.pdf_files) && data.pdf_files.length > 0) {
+                    data.pdf_files.forEach(pdfFileName => {
+                        // IMPORTANT: Adjust the path prefix so the links work correctly in your browser.
+                        // This depends on how your main web server serves static files.
+                        const fullPath = `Documents/${pdfFileName}`; // <--- ADJUST THIS PATH AS NEEDED
+
+                        const listItem = document.createElement('li');
+                        const link = document.createElement('a');
+                        link.href = fullPath;
+                        link.textContent = pdfFileName;
+                        link.target = "_blank"; // Open in new tab
+                        listItem.appendChild(link);
+                        pdfLinksList.appendChild(listItem);
+                    });
+                } else {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = 'No specific documents referenced.';
+                    pdfLinksList.appendChild(listItem);
+                }
+                // --- END DISPLAY PDF LINKS ---
+
+                console.log("DEBUG: Data processing finished successfully for", resultSectionId);
+
+            })
+            .catch(error => {
+                // --- HANDLE FETCH/NETWORK/JAVASCRIPT ERRORS ---
+                console.error(`Error querying RAG for ${resultSectionId}:`, error);
+                // ONLY update the content area, DO NOT navigate away or change the main page view
+                briefingContent.textContent = `Error connecting to analysis engine: ${error.message || 'Unknown error'}`;
+                pdfLinksList.innerHTML = ''; // Clear list on error
+                // DO NOT call showPage() or anything that changes the main page view here
+                // --- END ERROR HANDLING ---
+            });
+            // Note: The function ends here. The asynchronous fetch continues.
+            console.log("DEBUG: queryRAGAndDisplay function initiated fetch for", resultSectionId);
+        }
+        // --- END queryRAGAndDisplay ---
+
+            /**
+             * Triggers RAG analysis for Chartering Requirements.
+             * Gathers data from the chartering form.
+             */
+            function analyzeCharteringWithRAG() {
+                // --- GATHER DATA FROM CHARTERING FORM ---
+                // You need to replace these placeholder IDs with the actual IDs from your chartering form inputs
+                const charteringData = {
+                    "Cargo Type": document.getElementById('cargoType')?.value || "N/A", // Matches request.form.get("Cargo Type")
+                    "From Port": "N/A", // Needs implementation if required
+                    "To Port": "N/A",   // Needs implementation if required
+                    "Loading Port": "N/A",
+                    "Discharging Port": "N/A",
+                    "ship_type": "N/A",
+                    "dwt": "N/A",
+                    "length": "N/A",
+                    "width": "N/A",
+                    "draft": "N/A",
+                    "CAPEX Description": "N/A",
+                    "Fuel Type": "N/A", // Or get from a specific input if it exists
+                    "Laycan Start": "N/A",
+                    "Laycan End": "N/A",
+                    "Pooling Price": "N/A"
+                };
+                console.log("Sending Chartering Data to RAG:", charteringData); // For debugging
+
+                // --- END GATHER DATA ---
+
+                // Call the generic RAG display function with the collected data
+                // Make sure the element IDs passed here exist in your Chartering page HTML
+                queryRAGAndDisplay(
+                    charteringData, // Send the data object
+                    'chartering-rag-results',        // ID of the main results container div
+                    'chartering-briefing-content',   // ID of the div to put the briefing text into
+                    'chartering-pdf-links-list'      // ID of the ul to put the PDF links into
+                );
+            }
+
+            /**
+             * Triggers RAG analysis for Input & Analysis.
+             * Gathers data from the analysis parameters form.
+             */
+            function analyzeInputWithRAG() {
+                // --- GATHER DATA FROM INPUT ANALYSIS FORM ---
+                const inputData = {
+                    origin_port: "N/A", // Not directly relevant here?
+                    destination_port: "N/A",
+                    ship_type: "Generic Vessel", // Placeholder
+                    dwt: "N/A",
+                    length: "N/A",
+                    width: "N/A",
+                    draft: "N/A",
+                    fuel_type: document.getElementById('fuelType')?.value || "N/A", // Example ID, adjust if needed
+                    cargo: "N/A", // Not directly relevant here?
+                    timeframe: "N/A" // Could derive from startYear/lifespan?
+                    // You could add custom fields for this page if the RAG pipeline supports them
+                    // e.g., "analysis_type": "Fuel Strategy"
+                };
+                // Potentially add more contextually relevant data from the form
+                const lifespan = document.getElementById('vesselLifespan')?.value;
+                const discountRate = document.getElementById('discountRate')?.value;
+                if (lifespan) inputData.vessel_lifespan_years = lifespan;
+                if (discountRate) inputData.discount_rate_percent = discountRate;
+                // --- END GATHER DATA ---
+
+                queryRAGAndDisplay(
+                    inputData,
+                    'input-rag-results',
+                    'input-briefing-content',
+                    'input-pdf-links-list'
+                );
+            }
+
+            /**
+             * Triggers RAG analysis for Voyage Optimization.
+             * Uses the currently selected load/discharge ports.
+             */
+            function analyzeVoyageWithRAG() {
+                const loadPortCodeElement = document.getElementById('routeLoadPort');
+                const dischargePortCodeElement = document.getElementById('routeDischargePort');
+
+                if (!loadPortCodeElement || !dischargePortCodeElement) {
+                    console.error("Voyage RAG Error: Port select elements not found.");
+                    // Optionally, show an error in the voyage-rag-results section
+                    const resultSection = document.getElementById('voyage-rag-results');
+                    const briefingContent = document.getElementById('voyage-briefing-content');
+                    if (resultSection && briefingContent) {
+                        resultSection.classList.remove('hidden');
+                        briefingContent.textContent = 'Error: Cannot analyze route. Port information not found.';
+                    }
+                    return;
+                }
+
+                const loadPortCode = loadPortCodeElement.value;
+                const dischargePortCode = dischargePortCodeElement.value;
+
+                if (!loadPortCode || !dischargePortCode || loadPortCode === dischargePortCode) {
+                    console.warn("Voyage RAG Warning: Invalid port selection for analysis.");
+                    // Optionally, show a warning
+                    const resultSection = document.getElementById('voyage-rag-results');
+                    const briefingContent = document.getElementById('voyage-briefing-content');
+                    if (resultSection && briefingContent) {
+                        resultSection.classList.remove('hidden');
+                        briefingContent.textContent = 'Please select different origin and destination ports to analyze the route.';
+                    }
+                    return;
+                }
+
+                // Find port names from generatedPortDataFromJson (assuming it's loaded)
+                let loadPortName = "Unknown Origin";
+                let dischargePortName = "Unknown Destination";
+                if (typeof generatedPortDataFromJson !== 'undefined' && Array.isArray(generatedPortDataFromJson)) {
+                    const loadPortObj = generatedPortDataFromJson.find(p => p.code === loadPortCode);
+                    const dischargePortObj = generatedPortDataFromJson.find(p => p.code === dischargePortCode);
+                    loadPortName = loadPortObj ? loadPortObj.name : loadPortCode;
+                    dischargePortName = dischargePortObj ? dischargePortObj.name : dischargePortCode;
+                }
+
+                // --- GATHER DATA FOR VOYAGE ANALYSIS ---
+                const voyageData = {
+                    origin_port: loadPortName,
+                    destination_port: dischargePortName,
+                    ship_type: "N/A", // Could infer from context if available
+                    dwt: "N/A",
+                    length: "N/A",
+                    width: "N/A",
+                    draft: "N/A",
+                    fuel_type: "N/A", // Could infer from context if available
+                    cargo: "N/A", // Could infer from context if available
+                    timeframe: "N/A"
+                    // Add a field to indicate analysis type if helpful for the RAG prompt
+                    // e.g., "analysis_type": "Voyage Optimization"
+                };
+                // --- END GATHER DATA ---
+
+                queryRAGAndDisplay(
+                    voyageData,
+                    'voyage-rag-results',
+                    'voyage-briefing-content',
+                    'voyage-pdf-links-list'
+                );
+            }
+
+// --- END: RAG Integration Functions ---
 
         // Initialize application
         function init() {
