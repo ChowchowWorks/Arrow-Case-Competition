@@ -20,8 +20,11 @@ COPY . .
 # Make sure the chroma_db directory exists
 RUN mkdir -p chroma_db
 
+# Copy the chroma_db from your repo into the container
+COPY ../chroma_db ./chroma_db
+
 # Expose port for Flask
 EXPOSE 5000
 
 # Command to run Flask app
-CMD ["python", "RAG/main.py"]
+CMD ["gunicorn", "main:app"]
