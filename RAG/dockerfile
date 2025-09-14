@@ -1,25 +1,27 @@
+
 # Use official Python image
 FROM python:3.11-slim
 
-# Set working directory
-WORKDIR /app
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PROJECT_ROOT=/app
 
-# Copy requirements first (for caching)
-COPY requirements.txt .
+# Set working directory
+WORKDIR $PROJECT_ROOT
+
 
 # Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt ./requirements.txt
+RUN pip install -r requirements.txt
 
-# Copy the rest of the app
+# Copy the entire project into the container
 COPY . .
 
-# Set environment variables (optional)
-ENV FLASK_APP=main.py
-ENV FLASK_RUN_HOST=0.0.0.0
-ENV FLASK_RUN_PORT=5000
+# Make sure the chroma_db directory exists
+RUN mkdir -p chroma_db
 
-# Expose port
+# Expose port for Flask
 EXPOSE 5000
 
-# Start the app with gunicorn
-CMD ["gunicorn", "main:app", "-b", "0.0.0.0:5000"]
+# Command to run Flask app
+CMD ["python", "RAG/main.py"]

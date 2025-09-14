@@ -1,12 +1,12 @@
 import os
 from loader import receive
-from config import HF_TOKEN, DOCS_DIR, PROJECT_ROOT
+from config import HF_TOKEN, DOCS_DIR, PROJECT_ROOT, CHROMA_DB_DIR
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
 os.environ['USER_AGENT'] = "ARROW_RAG"
 
-def embed(documents, persist_directory = 'chroma_db'):
+def embed(documents, persist_directory = CHROMA_DB_DIR):
     '''This function takes as input a file_path as 'documents
     It calls the receive function to chunk the document at the file_path location
     Function will check if there is an existing vector store pre-tuned as chroma_db
